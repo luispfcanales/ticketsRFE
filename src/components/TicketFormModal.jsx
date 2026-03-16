@@ -242,6 +242,7 @@ export const TicketFormModal = ({ isOpen, onClose, onSave, ticket, tickets = [] 
                                 >
                                     <SelectItem key="nuevo" value="nuevo">Nuevo</SelectItem>
                                     <SelectItem key="en_proceso" value="en_proceso">En Proceso</SelectItem>
+                                    <SelectItem key="atendido_parcialmente" value="atendido_parcialmente">Atendido Parcialmente</SelectItem>
                                     <SelectItem key="en_cotizacion" value="en_cotizacion">En Cotización</SelectItem>
                                     <SelectItem key="en_revision" value="en_revision">En Revisión por mí</SelectItem>
                                     <SelectItem key="cerrado" value="cerrado">Cerrado</SelectItem>
