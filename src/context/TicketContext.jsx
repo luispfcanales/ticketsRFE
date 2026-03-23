@@ -119,11 +119,22 @@ export const TicketProvider = ({ children }) => {
         }
     };
 
+    const [isAdmin, setIsAdmin] = useState(() => {
+        return localStorage.getItem('admin_mode') === 'true';
+    });
+
+    const toggleAdmin = (value) => {
+        setIsAdmin(value);
+        localStorage.setItem('admin_mode', value);
+    };
+
     return (
         <TicketContext.Provider value={{
             tickets,
             loading,
             error,
+            isAdmin,
+            setIsAdmin: toggleAdmin,
             addTicket,
             updateTicket,
             deleteTicket,

@@ -1,6 +1,7 @@
 import { Draggable } from '@hello-pangea/dnd';
 import { format } from 'date-fns';
-import { Pencil, X, ExternalLink } from 'lucide-react';
+import { Pencil, X, ExternalLink, Lock } from 'lucide-react';
+import { useTickets } from '../context/TicketContext';
 
 const priorityConfig = {
     'critico': { color: 'text-violet-700', bg: 'bg-violet-100', border: 'border-violet-300', label: 'Crítico' },
@@ -11,10 +12,11 @@ const priorityConfig = {
 };
 
 export const TicketCard = ({ ticket, index, onEdit, onDelete }) => {
+    const { isAdmin } = useTickets();
     const priority = priorityConfig[ticket.importancia] || priorityConfig['Media (Operativo)'];
 
     return (
-        <Draggable draggableId={ticket.id} index={index}>
+        <Draggable draggableId={ticket.id} index={index} isDragDisabled={!isAdmin}>
             {(provided, snapshot) => (
                 <div
                     ref={provided.innerRef}
@@ -85,20 +87,29 @@ export const TicketCard = ({ ticket, index, onEdit, onDelete }) => {
                         </div>
 
                         {/* 6. Acciones */}
-                        <div className="flex gap-0.5 w-12 shrink-0 justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                            <button
-                                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
-                                onClick={() => onEdit(ticket)}
-                            >
-                                <Pencil size={12} />
-                            </button>
-                            <button
-                                className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-                                onClick={() => onDelete(ticket.id)}
-                            >
-                                <X size={12} />
-                            </button>
-                        </div>
+                        {isAdmin && (
+                            <div className="flex gap-0.5 w-12 shrink-0 justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                                <button
+                                    className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+                                    onClick={() => onEdit(ticket)}
+                                    title="Editar ticket"
+                                >
+                                    <Pencil size={12} />
+                                </button>
+                                <button
+                                    className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                                    onClick={() => onDelete(ticket.id)}
+                                    title="Eliminar ticket"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        )}
+                        {!isAdmin && (
+                            <div className="w-12 shrink-0 flex justify-end">
+                                <Lock size={10} className="text-gray-300" />
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

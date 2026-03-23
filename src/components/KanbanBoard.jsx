@@ -13,9 +13,10 @@ const COLUMNS = [
 ];
 
 export const KanbanBoard = ({ searchQuery, modalState, onModalClose }) => {
-    const { tickets, updateTicketStatus, addTicket, updateTicket, deleteTicket } = useTickets();
+    const { tickets, updateTicketStatus, addTicket, updateTicket, deleteTicket, isAdmin } = useTickets();
 
     const onDragEnd = (result) => {
+        if (!isAdmin) return;
         const { destination, source, draggableId } = result;
 
         if (!destination) return;

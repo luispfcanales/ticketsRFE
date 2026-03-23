@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { Plus, Search, LayoutDashboard } from 'lucide-react';
 import { KanbanBoard } from './components/KanbanBoard';
-import { TicketProvider } from './context/TicketContext';
+import { TicketProvider, useTickets } from './context/TicketContext';
+import { AdminModal } from './components/AdminModal';
+import { Lock } from 'lucide-react';
 
 function AppContent() {
+  const { isAdmin } = useTickets();
   const [searchQuery, setSearchQuery] = useState('');
   const [modalState, setModalState] = useState({ isOpen: false, ticket: null });
 
   const handleOpenModal = (ticket = null) => {
+    if (!isAdmin && !ticket) return; // Prevent creating new if not admin
     setModalState({ isOpen: true, ticket });
   };
 
@@ -47,14 +51,20 @@ function AppContent() {
             />
           </div>
           <button
-            className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:from-violet-500 hover:to-indigo-500 transition-all flex items-center gap-1.5 whitespace-nowrap shadow-md shadow-violet-600/20 active:scale-[0.97]"
-            onClick={() => handleOpenModal()}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-all flex items-center gap-1.5 whitespace-nowrap shadow-md active:scale-[0.97] ${
+              isAdmin 
+                ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-500 hover:to-indigo-500 shadow-violet-600/20" 
+                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+            }`}
+            onClick={() => isAdmin && handleOpenModal()}
+            title={!isAdmin ? "Modo administrador requerido" : "Crear nuevo ticket"}
           >
-            <Plus size={16} />
+            {isAdmin ? <Plus size={16} /> : <Lock size={14} />}
             Nuevo
           </button>
         </div>
       </header>
+      <AdminModal />
 
       <main className="flex-1 overflow-hidden p-1.5">
         <KanbanBoard
