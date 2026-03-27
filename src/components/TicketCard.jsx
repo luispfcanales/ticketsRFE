@@ -11,9 +11,12 @@ const priorityConfig = {
     'Baja': { color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', label: 'Baja' }
 };
 
-export const TicketCard = ({ ticket, index, onEdit, onDelete }) => {
+export const TicketCard = ({ ticket, index, onEdit, onDelete, draggingId }) => {
     const { isAdmin } = useTickets();
     const priority = priorityConfig[ticket.importancia] || priorityConfig['Media (Operativo)'];
+    
+    // Un ticket debe contraerse si hay otro ticket siendo arrastrado
+    const shouldContract = draggingId && draggingId !== ticket.id;
 
     return (
         <Draggable draggableId={ticket.id} index={index} isDragDisabled={!isAdmin}>
@@ -22,9 +25,16 @@ export const TicketCard = ({ ticket, index, onEdit, onDelete }) => {
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
-                    className={`shrink-0 text-xs rounded-lg bg-white border border-gray-200 p-2 w-full transition-all duration-150 group hover:border-gray-300 hover:shadow-md ${snapshot.isDragging ? 'rotate-[0.5deg] z-50 shadow-xl ring-2 ring-violet-400/30 scale-[1.01]' : 'shadow-sm'}`}
+                    className={`shrink-0 rounded-md transition-all duration-200 group 
+                        ${snapshot.isDragging 
+                            ? 'bg-white border-2 border-indigo-500 z-50 shadow-2xl ring-4 ring-indigo-500/20 scale-[1.05] rotate-[0.5deg]' 
+                            : shouldContract
+                                ? 'h-1.5 py-0 px-0 bg-gray-200/40 border-none opacity-20 overflow-hidden shadow-none'
+                                : 'bg-white border-gray-200 p-2 shadow-sm border hover:border-gray-300 hover:shadow-md'
+                        }`}
                 >
-                    <div className="flex items-center gap-3">
+                    {shouldContract ? null : (
+                        <div className="flex items-center gap-3">
                         {/* 1. ID y Link */}
                         <div className="flex items-center gap-1.5 w-20 shrink-0">
                             <span className="font-mono text-[10px] text-gray-500 font-medium">
@@ -110,7 +120,8 @@ export const TicketCard = ({ ticket, index, onEdit, onDelete }) => {
                                 <Lock size={10} className="text-gray-300" />
                             </div>
                         )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             )}
         </Draggable>
