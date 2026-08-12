@@ -1,6 +1,6 @@
 import { Draggable } from '@hello-pangea/dnd';
 import { format } from 'date-fns';
-import { Pencil, X, ExternalLink, Lock } from 'lucide-react';
+import { Pencil, X, ExternalLink, Lock, FileText, Tag, Clock, Eye } from 'lucide-react';
 import { useTickets } from '../context/TicketContext';
 
 const priorityConfig = {
@@ -12,11 +12,46 @@ const priorityConfig = {
 };
 
 export const TicketCard = ({ ticket, index, onEdit, onDelete, draggingId }) => {
-    const { isAdmin } = useTickets();
+    const { isAdmin, tickets } = useTickets();
     const priority = priorityConfig[ticket.importancia] || priorityConfig['Media (Operativo)'];
     
+    // Buscar ticket relacionado para mostrar su código
+    const relatedTicket = ticket.referenciaTicketId
+        ? tickets.find(t => t.id === ticket.referenciaTicketId)
+        : null;
+
     // Un ticket debe contraerse si hay otro ticket siendo arrastrado
     const shouldContract = draggingId && draggingId !== ticket.id;
+
+    // Clasificar etiquetas especiales y normales
+    const specialTags = [];
+    const regularTags = [];
+    if (ticket.tags) {
+        ticket.tags.forEach(tag => {
+            const t = tag.toLowerCase().trim();
+            if (t === 'cotización' || t === 'cotizacion') {
+                specialTags.push({
+                    label: 'Cotización',
+                    classes: 'bg-rose-50 text-rose-600 border-rose-200',
+                    icon: <FileText size={11} />
+                });
+            } else if (t === 'atendido parcialmente') {
+                specialTags.push({
+                    label: 'Atendido Parcialmente',
+                    classes: 'bg-amber-50 text-amber-600 border-amber-200',
+                    icon: <Clock size={11} />
+                });
+            } else if (t === 'en revisión por rfe' || t === 'en revision por rfe' || t === 'en revisión rfe' || t === 'en revision rfe') {
+                specialTags.push({
+                    label: 'En Revisión por RFE',
+                    classes: 'bg-violet-50 text-violet-600 border-violet-200',
+                    icon: <Eye size={11} />
+                });
+            } else if (tag.trim()) {
+                regularTags.push(tag.trim());
+            }
+        });
+    }
 
     return (
         <Draggable draggableId={ticket.id} index={index} isDragDisabled={!isAdmin}>
@@ -35,8 +70,8 @@ export const TicketCard = ({ ticket, index, onEdit, onDelete, draggingId }) => {
                 >
                     {shouldContract ? null : (
                         <div className="flex items-center gap-3">
-                        {/* 1. ID y Link */}
-                        <div className="flex items-center gap-1.5 w-20 shrink-0">
+                        {/* 1. ID, Link y PDF */}
+                        <div className="flex items-center gap-1.5 w-24 shrink-0">
                             <span className="font-mono text-[10px] text-gray-500 font-medium">
                                 {ticket.ticketNumber || ticket.id}
                             </span>
@@ -51,34 +86,80 @@ export const TicketCard = ({ ticket, index, onEdit, onDelete, draggingId }) => {
                                     <ExternalLink size={11} />
                                 </a>
                             )}
-                        </div>
-
-                        {/* 2. Asunto */}
-                        <div className="font-semibold text-gray-800 truncate text-[12px] flex-1">
-                            {ticket.asunto}
-                        </div>
-
-                        {/* 3. Área */}
-                        <div className="text-gray-500 truncate text-[10px] w-32 shrink-0">
-                            {ticket.areaSolicitante}
-                        </div>
-
-                        {/* 4. Prioridad y Tags */}
-                        <div className="flex items-center gap-2 w-48 shrink-0 justify-end">
-                            {ticket.tags && ticket.tags.length > 0 && (
-                                <div className="flex gap-1">
-                                    {ticket.tags.slice(0, 1).map((tag, i) => (
-                                        <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap overflow-hidden text-ellipsis max-w-[60px]">
-                                            {tag}
-                                        </span>
-                                    ))}
-                                    {ticket.tags.length > 1 && (
-                                        <span className="text-[9px] px-1 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">
-                                            +{ticket.tags.length - 1}
-                                        </span>
-                                    )}
-                                </div>
+                            {ticket.cotizacionPdfData && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const newTab = window.open();
+                                        if (newTab) {
+                                            newTab.document.write(
+                                                `<iframe src="${ticket.cotizacionPdfData}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
+                                            );
+                                        }
+                                    }}
+                                    className="text-gray-400 hover:text-emerald-500 transition-colors"
+                                    title="Ver cotización PDF"
+                                >
+                                    <FileText size={11} />
+                                </button>
                             )}
+                        </div>
+
+                        {/* 2. Asunto y Ref */}
+                        <div className="font-semibold text-gray-800 text-[12px] flex-1 min-w-0 flex items-center gap-1.5">
+                            <span className="truncate" title={ticket.asunto}>{ticket.asunto}</span>
+                            {relatedTicket && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onEdit(relatedTicket);
+                                    }}
+                                    className="text-[9px] font-mono font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 px-1 py-0.5 rounded border border-violet-200 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+                                    title={`Relacionado con: ${relatedTicket.asunto}`}
+                                >
+                                    Ref: {relatedTicket.ticketNumber || relatedTicket.id}
+                                </button>
+                            )}
+                        </div>
+
+                        {/* 3. Área y Asignado */}
+                        <div className="text-gray-500 truncate text-[10px] w-32 shrink-0 flex flex-col gap-0.5">
+                            <span className="font-bold text-gray-700">{ticket.areaSolicitante}</span>
+                            {ticket.asignadoA && <span className="text-[9px] text-gray-400 truncate">Asig: {ticket.asignadoA}</span>}
+                        </div>
+
+                        {/* 4. Prioridad, Tags y Pago */}
+                        <div className="flex items-center gap-1.5 w-56 shrink-0 justify-end flex-wrap">
+                            {ticket.tipo && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200 whitespace-nowrap shrink-0">
+                                    {ticket.tipo}
+                                </span>
+                            )}
+                            {ticket.pagado && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap shrink-0">
+                                    Pagado
+                                </span>
+                            )}
+                            {/* Special tag badges */}
+                            {specialTags.map((stag, i) => (
+                                <span
+                                    key={`stag-${i}`}
+                                    className={`p-1 rounded border flex items-center justify-center shrink-0 shadow-sm ${stag.classes}`}
+                                    title={stag.label}
+                                >
+                                    {stag.icon}
+                                </span>
+                            ))}
+                            {/* Regular tags */}
+                            {regularTags.map((tag, i) => (
+                                <span
+                                    key={`rtag-${i}`}
+                                    className="p-1 rounded border flex items-center justify-center shrink-0 bg-gray-50 text-gray-500 border-gray-200 shadow-sm"
+                                    title={tag}
+                                >
+                                    <Tag size={11} />
+                                </span>
+                            ))}
                             <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${priority.color} ${priority.bg} ${priority.border}`}>
                                 {priority.label}
                             </span>

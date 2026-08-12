@@ -1,10 +1,13 @@
-import { useState } from 'react';
-import { Plus, Search, LayoutDashboard } from 'lucide-react';
-import { KanbanBoard, COLUMNS } from './components/KanbanBoard';
+import { useState, useMemo } from 'react';
+import { Plus, Search, LayoutDashboard, Lock, FileSpreadsheet, Filter, X, Download } from 'lucide-react';
+import { KanbanBoard } from './components/KanbanBoard';
 import { TicketProvider, useTickets } from './context/TicketContext';
 import { AdminModal } from './components/AdminModal';
-import { Lock } from 'lucide-react';
-import { DragDropContext, Droppable } from '@hello-pangea/dnd';
+import { DragDropContext } from '@hello-pangea/dnd';
+import { HashRouter, Routes, Route, Link } from 'react-router-dom';
+import { ImportTickets } from './components/ImportTickets';
+import { Select, SelectItem, Button } from '@nextui-org/react';
+import * as XLSX from 'xlsx';
 
 function AppContent() {
   const { isAdmin, tickets, updateTicketStatus } = useTickets();
@@ -13,11 +16,60 @@ function AppContent() {
   const [isDragging, setIsDragging] = useState(false);
   const [draggingId, setDraggingId] = useState(null);
 
-  // Encontrar el último ticket por ID (el más reciente)
-  const lastTicket = tickets.length > 0 
-    ? [...tickets].sort((a, b) => b.id - a.id)[0] 
-    : null;
-  const lastTicketNumber = lastTicket ? (lastTicket.ticketNumber || lastTicket.id) : null;
+  const [selectedAreas, setSelectedAreas] = useState(new Set());
+  const [selectedTags, setSelectedTags] = useState(new Set());
+
+  // Encontrar todas las áreas y etiquetas únicas presentes
+  const uniqueAreas = useMemo(() => {
+    const areas = new Set();
+    tickets.forEach(t => {
+      if (t.areaSolicitante) {
+        areas.add(t.areaSolicitante.trim().toUpperCase());
+      }
+    });
+    return Array.from(areas).sort();
+  }, [tickets]);
+
+  const uniqueTags = useMemo(() => {
+    const tags = new Set();
+    tickets.forEach(t => {
+      if (t.tags) {
+        t.tags.forEach(tag => {
+          if (tag) tags.add(tag.trim());
+        });
+      }
+    });
+    return Array.from(tags).sort();
+  }, [tickets]);
+
+  // Filtrar los tickets basados en la consulta y los selectores
+  const filteredTickets = useMemo(() => {
+    return tickets.filter(t => {
+      // 1. Búsqueda por texto
+      const query = searchQuery.toLowerCase().trim();
+      const matchesQuery = !query ||
+        (t.asunto || '').toLowerCase().includes(query) ||
+        (t.ticketNumber || '').toLowerCase().includes(query) ||
+        (t.areaSolicitante || '').toLowerCase().includes(query) ||
+        (t.assigned_to || t.asignadoA || '').toLowerCase().includes(query);
+
+      // 2. Filtro de área
+      let matchesArea = true;
+      if (selectedAreas.size > 0) {
+        const ticketArea = (t.areaSolicitante || '').trim().toUpperCase();
+        matchesArea = selectedAreas.has(ticketArea);
+      }
+
+      // 3. Filtro de etiquetas (debe contener todas las etiquetas seleccionadas)
+      let matchesTags = true;
+      if (selectedTags.size > 0) {
+        const ticketTags = t.tags || [];
+        matchesTags = Array.from(selectedTags).every(tag => ticketTags.includes(tag));
+      }
+
+      return matchesQuery && matchesArea && matchesTags;
+    });
+  }, [tickets, searchQuery, selectedAreas, selectedTags]);
 
   const handleOpenModal = (ticket = null) => {
     if (!isAdmin && !ticket) return; // Prevent creating new if not admin
@@ -31,6 +83,56 @@ function AppContent() {
       setModalState({ isOpen: false, ticket: null });
     }
   };
+
+  const handleExportToExcel = () => {
+    if (filteredTickets.length === 0) {
+      alert("No hay tickets que coincidan con los filtros para exportar.");
+      return;
+    }
+
+    const rows = filteredTickets.map(t => {
+      const formatDateExcel = (isoStr) => {
+        if (!isoStr) return "";
+        const d = new Date(isoStr);
+        if (isNaN(d.getTime())) return "";
+        return d.toLocaleDateString('es-ES', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      };
+
+      return {
+        "Nº Ticket": t.ticketNumber || "",
+        "Asunto": t.asunto || "",
+        "Área Solicitante": t.areaSolicitante || "",
+        "Asignado A": t.asignadoA || "",
+        "Tipo": t.tipo || "",
+        "Prioridad": t.importancia || "",
+        "Estado": t.estado === "nuevo" ? "Nuevo" : t.estado === "en_proceso" ? "En Proceso" : "Cerrado",
+        "Etiquetas": (t.tags || []).join(", "),
+        "Link": t.link || "",
+        "Fecha de Reporte": formatDateExcel(t.fechaReporte),
+        "Fecha Respuesta Recibida": formatDateExcel(t.fechaRespuestaRecibida),
+        "Respuesta Recibida": t.respuestaRecibida || "",
+        "Fecha de Resolución/Cierre": formatDateExcel(t.fechaCierre),
+        "Pagado": t.pagado ? "Sí" : "No"
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Tickets");
+    XLSX.writeFile(workbook, `tickets_exportados_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // Encontrar el último ticket por ID (el más reciente) para mostrar en el badge
+  const lastTicket = tickets.length > 0 
+    ? [...tickets].sort((a, b) => b.id - a.id)[0] 
+    : null;
+  const lastTicketNumber = lastTicket ? (lastTicket.ticketNumber || lastTicket.id) : null;
 
   const onDragStart = (start) => {
     if (isAdmin) {
@@ -86,6 +188,20 @@ function AppContent() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+            <Link
+              to="/import"
+              className="rounded-lg px-4 py-2 text-sm font-medium transition-all flex items-center gap-1.5 whitespace-nowrap bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 shadow-sm active:scale-[0.97] hover:border-gray-300"
+            >
+              <FileSpreadsheet size={16} className="text-violet-500" />
+              Importar
+            </Link>
+            <Button
+              onPress={handleExportToExcel}
+              className="rounded-lg px-4 py-2 text-sm font-medium transition-all flex items-center gap-1.5 whitespace-nowrap bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 shadow-sm active:scale-[0.97] hover:border-gray-300 h-9"
+              startContent={<Download size={16} className="text-emerald-500" />}
+            >
+              Exportar
+            </Button>
             <button
               className={`rounded-lg px-4 py-2 text-sm font-medium transition-all flex items-center gap-1.5 whitespace-nowrap shadow-md active:scale-[0.97] ${
                 isAdmin 
@@ -100,11 +216,81 @@ function AppContent() {
             </button>
           </div>
         </header>
+
+        {/* Barra de Filtros Avanzados */}
+        <div className="bg-white border-b border-gray-200/80 px-4 py-2 flex flex-wrap items-center gap-3 relative z-40 shadow-sm">
+          <div className="flex items-center gap-1 text-xs text-gray-500 font-semibold select-none mr-2">
+            <Filter size={13} className="text-gray-400" />
+            <span>Filtros avanzados:</span>
+          </div>
+
+          {/* Filtro por Áreas */}
+          <div className="w-48">
+            <Select
+              size="sm"
+              placeholder="Todas las Áreas"
+              aria-label="Filtrar por Área"
+              selectionMode="multiple"
+              selectedKeys={selectedAreas}
+              onSelectionChange={setSelectedAreas}
+              classNames={{
+                trigger: "bg-gray-50 border border-gray-200 hover:bg-gray-100 min-h-8 h-8 rounded-lg",
+                value: "text-[11px] font-medium"
+              }}
+            >
+              {uniqueAreas.map(area => (
+                <SelectItem key={area} value={area} className="text-xs">
+                  {area}
+                </SelectItem>
+              ))}
+            </Select>
+          </div>
+
+          {/* Filtro por Etiquetas */}
+          <div className="w-48">
+            <Select
+              size="sm"
+              placeholder="Todas las Etiquetas"
+              aria-label="Filtrar por Etiquetas"
+              selectionMode="multiple"
+              selectedKeys={selectedTags}
+              onSelectionChange={setSelectedTags}
+              classNames={{
+                trigger: "bg-gray-50 border border-gray-200 hover:bg-gray-100 min-h-8 h-8 rounded-lg",
+                value: "text-[11px] font-medium"
+              }}
+            >
+              {uniqueTags.map(tag => (
+                <SelectItem key={tag} value={tag} className="text-xs">
+                  {tag}
+                </SelectItem>
+              ))}
+            </Select>
+          </div>
+
+          {/* Limpiar Filtros */}
+          {(selectedAreas.size > 0 || selectedTags.size > 0) && (
+            <Button
+              size="sm"
+              variant="flat"
+              color="danger"
+              onPress={() => {
+                setSelectedAreas(new Set());
+                setSelectedTags(new Set());
+              }}
+              className="h-8 rounded-lg text-xs font-semibold px-3"
+              startContent={<X size={12} />}
+            >
+              Limpiar filtros
+            </Button>
+          )}
+        </div>
+
         <AdminModal />
 
         <main className="flex-1 overflow-hidden p-1.5">
           <KanbanBoard
-            searchQuery={searchQuery}
+            tickets={filteredTickets}
             modalState={modalState}
             onModalClose={handleCloseModal}
             draggingId={draggingId}
@@ -118,7 +304,12 @@ function AppContent() {
 function App() {
   return (
     <TicketProvider>
-      <AppContent />
+      <HashRouter>
+        <Routes>
+          <Route path="/" element={<AppContent />} />
+          <Route path="/import" element={<ImportTickets />} />
+        </Routes>
+      </HashRouter>
     </TicketProvider>
   );
 }
